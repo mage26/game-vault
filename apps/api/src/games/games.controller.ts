@@ -11,10 +11,21 @@ export class GamesController {
   }
 
   @Get('search')
-  async search(@Query('q') query: string) {
+  async search(
+    @Query('q') query: string,
+    @Query('platform') platform?: string,
+  ) {
     if (!query) return [];
 
-    return await this.gamesService.searchGames(query);
+    return await this.gamesService.searchGames(query, platform);
+  }
+
+  @Get('by-ids')
+  async byIds(@Query('ids') ids: string, @Query('platform') platform?: string) {
+    if (!ids) return [];
+    const idList = ids.split(',').map(Number).filter(Boolean);
+    if (idList.length === 0) return [];
+    return await this.gamesService.gamesByIds(idList, platform);
   }
 
   @Get('platforms')

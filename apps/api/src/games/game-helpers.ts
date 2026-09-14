@@ -18,6 +18,7 @@ export type IGDBGameType = {
       abbreviation: string;
     };
   }[];
+  first_release_date?: number;
 };
 
 export type IGDBPlatformType = {
@@ -42,6 +43,9 @@ export function mapGames(games: IGDBGameType[]) {
     releaseDates: game.release_dates.map(
       ({ human, platform }) => `${platform.abbreviation}: ${human}`,
     ),
+    releaseDate: game.first_release_date
+      ? new Date(game.first_release_date * 1000).toISOString().split('T')[0]
+      : null,
   }));
 }
 
