@@ -1,11 +1,16 @@
 {
   "name": "game-vault-monorepo",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "packageManager": "npm@11.6.1",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
+    "build": "npm run build:api && npm run build:web",
     "build:api": "npm run build --workspace=apps/api",
     "build:web": "npm run build --workspace=apps/web",
     "dev:api": "npm run start:dev --workspace=apps/api",

@@ -1,6 +1,11 @@
 import type { MappedGame, MappedPlatform } from '@game-vault/types';
 
-const API_URL = process.env.API_URL ?? 'http://localhost:3000';
+// Same Vercel deployment serves both apps, so the API is reachable at /api on
+// this project's own domain (VERCEL_URL) unless API_URL overrides it, e.g. to
+// point at a separately-deployed API.
+const API_URL =
+  process.env.API_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}/api` : 'http://localhost:3000/api');
 
 export async function fetchGames(platformId?: string): Promise<MappedGame[]> {
   const url = new URL(`${API_URL}/games/games`);
