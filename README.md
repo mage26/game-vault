@@ -1,98 +1,109 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+<h1 align="center">GAME VAULT</h1>
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+<p align="center">Browse and search games using the <a href="https://www.igdb.com/api">IGDB API</a>.</p>
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Overview
 
-## Description
+Game Vault is an npm-workspaces monorepo with two independently deployed apps and a shared types package:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
-
-```bash
-$ npm install
+```
+apps/
+  api/            NestJS API — proxies/aggregates the IGDB API (deployed to AWS)
+  web/             Next.js 15 (App Router) frontend (deployed to Vercel)
+packages/
+  types/          Shared TypeScript interfaces (MappedGame, MappedPlatform)
 ```
 
-## Compile and run the project
+- **apps/api** authenticates against IGDB (via Twitch's OAuth2 client-credentials flow), caches the access token in memory, and exposes a small REST API for games and platforms. It's a plain NestJS/Express server (`node dist/main.js`, listening on `$PORT`) with a `Dockerfile` for containerized AWS deployment.
+- **apps/web** is a server-rendered Next.js frontend that fetches from the API, and lets users search, filter by platform, and favorite games (stored in `localStorage`).
+- **packages/types** holds the `MappedGame` / `MappedPlatform` interfaces shared by both apps (referenced as `@game-vault/types`).
+
+The two apps are deployed separately and talk to each other over HTTP across origins — there's no shared domain or reverse proxy between them, so `API_URL` (web → api) and `WEB_ORIGIN` (api's CORS allow-list) must point at each other's real deployed URLs in production.
+
+## Requirements
+
+- Node.js >= 20.9
+- npm >= 11 (workspaces are used for dependency management — install once from the repo root)
+- An IGDB/Twitch application: [client ID and secret](https://api-docs.igdb.com/#account-creation)
+
+## Setup
+
+Install dependencies for all workspaces from the repo root:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+Create `apps/api/.env` with your IGDB credentials:
+
+```
+IGDB_CLIENT_ID=your_twitch_client_id
+IGDB_CLIENT_SECRET=your_twitch_client_secret
+```
+
+## Development
+
+Run each app in its own terminal:
 
 ```bash
-# unit tests
-$ npm run test
+npm run dev:api   # NestJS API on http://localhost:3000 (routes prefixed with /api)
+npm run dev:web   # Next.js frontend on http://localhost:3001
+```
 
-# e2e tests
-$ npm run test:e2e
+The web app talks to the API at `http://localhost:3000/api` by default (see `apps/web/lib/api.ts`), and the API allows CORS from `http://localhost:3001` by default. Override either with the `API_URL` (web) or `WEB_ORIGIN` (api) environment variables.
 
-# test coverage
-$ npm run test:cov
+## Building
+
+```bash
+npm run build       # builds both apps (build:api + build:web)
+npm run build:api   # apps/api -> apps/api/dist
+npm run build:web   # apps/web -> apps/web/.next
+```
+
+## API
+
+All routes are served under the `/api` prefix.
+
+| Method | Path                 | Query params           | Description                                  |
+| ------ | -------------------- | ----------------------- | --------------------------------------------- |
+| GET    | `/api/games/games`    | `platform?`             | List games, optionally filtered by platform id |
+| GET    | `/api/games/search`   | `q`, `platform?`        | Search games by name                          |
+| GET    | `/api/games/by-ids`   | `ids` (comma-separated), `platform?` | Fetch specific games by IGDB id  |
+| GET    | `/api/games/platforms`| —                       | List the supported platforms                  |
+
+The set of platforms surfaced (and used as the default filter) is configured in `apps/api/src/config/configuration.ts`.
+
+## Testing (API)
+
+```bash
+npm test --workspace=apps/api        # unit tests
+npm run test:e2e --workspace=apps/api
+npm run test:cov --workspace=apps/api
 ```
 
 ## Deployment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+The frontend and API are deployed independently, on different providers.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+### Frontend (Vercel)
+
+The Vercel project's **Root Directory** is set to `apps/web`, so Vercel builds and deploys it directly with zero extra config (it auto-detects Next.js). Set this environment variable on the Vercel project:
+
+- `API_URL` — the API's public URL, e.g. `https://api.your-domain.com/api` (must include the `/api` prefix). Without it, the web app falls back to `http://localhost:3000/api`, which won't resolve in production.
+
+### API (AWS)
+
+`apps/api/Dockerfile` builds a standalone container image for the API, built from the **repo root** (it needs the root lockfile and workspace `package.json` files to resolve `npm ci`):
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+docker build -f apps/api/Dockerfile -t game-vault-api .
+docker run -p 3000:3000 \
+  -e IGDB_CLIENT_ID=... -e IGDB_CLIENT_SECRET=... -e WEB_ORIGIN=https://your-app.vercel.app \
+  game-vault-api
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+This image works as-is on any AWS compute that runs a container and provides `$PORT` (or defaults to `3000`) — App Runner, ECS/Fargate, Elastic Beanstalk's Docker platform, or a plain EC2 host running Docker. Set these environment variables wherever it runs:
 
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- `IGDB_CLIENT_ID`, `IGDB_CLIENT_SECRET` — required, from your IGDB/Twitch app
+- `WEB_ORIGIN` — the deployed Vercel URL, so the API's CORS allow-list accepts requests from it (defaults to `http://localhost:3001`, which only works locally)
+- `PORT` — optional; most AWS services set this automatically

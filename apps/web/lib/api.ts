@@ -1,11 +1,9 @@
 import type { MappedGame, MappedPlatform } from '@game-vault/types';
 
-// Same Vercel deployment serves both apps, so the API is reachable at /api on
-// this project's own domain (VERCEL_URL) unless API_URL overrides it, e.g. to
-// point at a separately-deployed API.
-const API_URL =
-  process.env.API_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}/api` : 'http://localhost:3000/api');
+// The API is deployed separately (AWS), so its URL must always be provided
+// via API_URL in any deployed environment. Only local dev falls back to the
+// NestJS default of http://localhost:3000/api.
+const API_URL = process.env.API_URL ?? 'http://localhost:3000/api';
 
 export async function fetchGames(platformId?: string): Promise<MappedGame[]> {
   const url = new URL(`${API_URL}/games/games`);
